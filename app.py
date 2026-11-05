@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HardLock v1.2.0
+HardLock v1.3.0
 Free open-source remake of Cold Turkey Micromanager.
 Unlimited whitelist • Timed / Restart / Pomodoro / Allowance modes
 Emergency stop is intentionally difficult.
@@ -44,7 +44,7 @@ if sys.platform == "win32":
 
 # --------------- Constants ---------------
 APP_NAME = "HardLock"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 # Change this to your own GitHub repo once you create it
 # Format: https://api.github.com/repos/USERNAME/REPO/releases/latest
@@ -56,6 +56,13 @@ ALLOWLIST_FILE = APP_DIR / "allowlist.json"
 CONFIG_FILE = APP_DIR / "config.json"
 SESSION_FILE = APP_DIR / "active_session.json"   # richer state for resume
 LAST_SESSION_FILE = APP_DIR / "last_session.json"
+
+# Permanent install location (Windows)
+if sys.platform == "win32":
+    INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "HardLock"
+else:
+    INSTALL_DIR = Path.home() / ".local" / "share" / "HardLock"
+INSTALL_EXE = INSTALL_DIR / "HardLock.exe"
 
 DEFAULT_CONFIG = {
     "force_close": True,
@@ -95,6 +102,9 @@ class HardLockApp(ctk.CTk):
         self.current_whitelist = set()
         self.emergency_phrase = ""
         self.resume_data = None
+
+        # Ensure we are running from the permanent install location
+        self.ensure_installed()
 
         self.create_widgets()
         self.load_last_session_ui()
@@ -812,7 +822,61 @@ class HardLockApp(ctk.CTk):
                       command=top.destroy).pack()
 
     # --------------- Update system ---------------
+    def ensure_installed(self):
+        """Copy the EXE to a permanent location on first run (Windows)."""
+        if not getattr(sys, "frozen", False):
+            return  # running from source
+        if sys.platform != "win32":
+            return
+
+        current = Path(sys.executable).resolve()
+        try:
+            INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return
+
+        # Already running from the install location
+        try:
+            if current == INSTALL_EXE.resolve():
+                return
+        except Exception:
+            pass
+
+        # First run or launched from Downloads / elsewhere → install
+        try:
+            shutil.copy2(current, INSTALL_EXE)
+
+            # Best-effort Start Menu shortcut via PowerShell
+            try:
+                start_menu = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+                start_menu.mkdir(parents=True, exist_ok=True)
+                shortcut = start_menu / "HardLock.lnk"
+                ps_cmd = (
+                    "$ws = New-Object -ComObject WScript.Shell; "
+                    f"$s = $ws.CreateShortcut('{shortcut}'); "
+                    f"$s.TargetPath = '{INSTALL_EXE}'; "
+                    f"$s.WorkingDirectory = '{INSTALL_DIR}'; "
+                    "$s.Description = 'HardLock Focus Tool'; "
+                    "$s.Save()"
+                )
+                import subprocess
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps_cmd],
+                    capture_output=True, timeout=10
+                )
+            except Exception:
+                pass
+
+            # Relaunch from the installed copy and exit this instance
+            import subprocess
+            subprocess.Popen([str(INSTALL_EXE)], cwd=str(INSTALL_DIR))
+            sys.exit(0)
+        except Exception:
+            # If anything fails, just continue running from current location
+            pass
+
     def check_for_updates(self):
+
         """Non-blocking update check against GitHub Releases."""
         def worker():
             try:
@@ -872,17 +936,20 @@ class HardLockApp(ctk.CTk):
 
         def worker():
             try:
-                # Where the current executable lives
-                if getattr(sys, "frozen", False):
-                    current_exe = Path(sys.executable)
-                else:
-                    # Running from source – just notify
+                if not getattr(sys, "frozen", False):
                     self.after(0, lambda: messagebox.showinfo(
                         "Update",
                         "You are running from source.\n"
                         "Please pull the latest code or download the new EXE from the release page."
                     ))
                     return
+
+                # Always update the permanent install location
+                target_exe = INSTALL_EXE
+                try:
+                    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    target_exe = Path(sys.executable)
 
                 temp_dir = Path(tempfile.gettempdir()) / "hardlock_update"
                 temp_dir.mkdir(exist_ok=True)
@@ -907,8 +974,8 @@ class HardLockApp(ctk.CTk):
                     "    timeout /t 1 /nobreak >nul",
                     "    goto wait",
                     ")",
-                    f'copy /Y "{new_exe}" "{current_exe}" >nul',
-                    f'start "" "{current_exe}"',
+                    f'copy /Y "{new_exe}" "{target_exe}" >nul',
+                    f'start "" "{target_exe}"',
                     f'del "{new_exe}"',
                     'del "%~f0"',
                 ]
