@@ -44,7 +44,7 @@ if sys.platform == "win32":
 
 # --------------- Constants ---------------
 APP_NAME = "HardLock"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 
 # Change this to your own GitHub repo once you create it
 # Format: https://api.github.com/repos/USERNAME/REPO/releases/latest

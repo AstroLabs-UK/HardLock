@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:   # allows manual runs from the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
 
       - name: Build HardLock.exe
         run: |
-          pyinstaller --onefile --windowed --name "HardLock" --icon=icon.png app.py
+          pyinstaller --onefile --windowed --name "HardLock" --icon=icon.png --manifest=hardlock.manifest --uac-admin --clean app.py
 
       - name: Get version from app.py
         id: version
@@ -51,8 +51,10 @@ jobs:
             **Version:** ${{ steps.version.outputs.version }}
             **Commit:** ${{ github.sha }}
             
-            Download `HardLock.exe` below and replace your existing copy.
-            Any active focus session will be offered for resume on next launch.
+            This build requests Administrator privileges (UAC) for stronger process control.
+            
+            Download `HardLock.exe` below. On first run it installs to `%LOCALAPPDATA%\HardLock\`.
+            Any active focus session will be offered for resume after updates.
           files: |
             dist/HardLock.exe
           draft: false
