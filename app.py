@@ -498,18 +498,23 @@ class HardLockApp(ctk.CTk):
         messagebox.showinfo("Saved", "Emergency password updated.")
 
     def update_summary(self):
-        mode = self.mode_var.get()
+        if not hasattr(self, "summary_label"):
+            return
+        mode = self.mode_var.get() if hasattr(self, "mode_var") else "timed"
         apps = len(self.allowlist)
         text = f"Allowlist: {apps} app(s)\nMode: {mode.upper()}\n"
-        if mode == "timed":
+        if mode == "timed" and hasattr(self, "duration_entry"):
             text += f"Duration: {self.duration_entry.get()} minutes"
         elif mode == "restart":
             text += "Block lasts until computer restart"
-        elif mode == "pomodoro":
+        elif mode == "pomodoro" and hasattr(self, "pomo_work"):
             text += f"Work {self.pomo_work.get()} min / Break {self.pomo_break.get()} min × {self.pomo_cycles.get()} cycles"
-        elif mode == "allowance":
+        elif mode == "allowance" and hasattr(self, "allowance_entry"):
             text += f"Allowance {self.allowance_entry.get()} min → then block {self.allow_block_entry.get()} min"
-        text += f"\nAction: {'Force-close' if self.force_var.get() else 'Minimize (best effort)'}"
+        if hasattr(self, "force_var"):
+            text += f"\nAction: {'Force-close' if self.force_var.get() else 'Minimize (best effort)'}"
+        else:
+            text += "\nAction: Force-close"
         self.summary_label.configure(text=text)
 
     # --------------- Blocking engine ---------------
