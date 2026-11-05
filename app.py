@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HardLock v1.1.0
+HardLock v1.2.0
 Free open-source remake of Cold Turkey Micromanager.
 Unlimited whitelist • Timed / Restart / Pomodoro / Allowance modes
 Emergency stop is intentionally difficult.
@@ -44,7 +44,7 @@ if sys.platform == "win32":
 
 # --------------- Constants ---------------
 APP_NAME = "HardLock"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 # Change this to your own GitHub repo once you create it
 # Format: https://api.github.com/repos/USERNAME/REPO/releases/latest
@@ -69,17 +69,20 @@ DEFAULT_CONFIG = {
     "update_url": UPDATE_CHECK_URL,
 }
 
+# Swiss Design / HardLock colour system
+# Primary red #D82C2C, charcoal #1A1A1A, cool grey #A9B2B1
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("dark-blue")  # base, we override colours below
 
 
 class HardLockApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title(f"{APP_NAME}  v{APP_VERSION}")
-        self.geometry("780x640")
-        self.minsize(700, 560)
+        self.title(f"{APP_NAME}")
+        self.geometry("820x680")
+        self.minsize(720, 580)
+        self.configure(fg_color="#1A1A1A")
 
         self.config = self.load_config()
         self.allowlist = self.load_allowlist()
@@ -186,11 +189,43 @@ class HardLockApp(ctk.CTk):
 
     # --------------- UI ---------------
     def create_widgets(self):
-        self.tabs = ctk.CTkTabview(self, width=740, height=530)
-        self.tabs.pack(padx=15, pady=10, fill="both", expand=True)
+        # Top brand bar
+        top = ctk.CTkFrame(self, fg_color="#1A1A1A", height=52, corner_radius=0)
+        top.pack(fill="x")
+        top.pack_propagate(False)
+
+        brand = ctk.CTkLabel(
+            top, text="  HARDLOCK",
+            font=ctk.CTkFont(family="Helvetica", size=18, weight="bold"),
+            text_color="#D82C2C"
+        )
+        brand.pack(side="left", padx=16, pady=12)
+
+        version_lbl = ctk.CTkLabel(
+            top, text=f"v{APP_VERSION}",
+            font=ctk.CTkFont(size=11),
+            text_color="#A9B2B1"
+        )
+        version_lbl.pack(side="left", pady=14)
+
+        # Main tab view
+        self.tabs = ctk.CTkTabview(
+            self,
+            width=780,
+            height=560,
+            fg_color="#1A1A1A",
+            segmented_button_fg_color="#2A2A2A",
+            segmented_button_selected_color="#D82C2C",
+            segmented_button_selected_hover_color="#B82424",
+            segmented_button_unselected_color="#2A2A2A",
+            segmented_button_unselected_hover_color="#333333",
+            text_color="#F2F2F2",
+            corner_radius=8
+        )
+        self.tabs.pack(padx=16, pady=(8, 6), fill="both", expand=True)
 
         self.tab_allow = self.tabs.add("Allowlist")
-        self.tab_duration = self.tabs.add("Duration & Breaks")
+        self.tab_duration = self.tabs.add("Duration")
         self.tab_settings = self.tabs.add("Settings")
         self.tab_start = self.tabs.add("Start")
 
@@ -199,10 +234,14 @@ class HardLockApp(ctk.CTk):
         self.build_settings_tab()
         self.build_start_tab()
 
-        self.status_var = ctk.StringVar(value="Ready. Select apps and start a focus session.")
-        status = ctk.CTkLabel(self, textvariable=self.status_var, anchor="w",
-                              font=ctk.CTkFont(size=12))
-        status.pack(fill="x", padx=20, pady=(0, 8))
+        self.status_var = ctk.StringVar(value="Ready — select apps and start a focus session.")
+        status = ctk.CTkLabel(
+            self, textvariable=self.status_var, anchor="w",
+            font=ctk.CTkFont(size=12),
+            text_color="#A9B2B1",
+            fg_color="#1A1A1A"
+        )
+        status.pack(fill="x", padx=20, pady=(0, 10))
 
     def build_allowlist_tab(self):
         frame = self.tab_allow
@@ -213,8 +252,8 @@ class HardLockApp(ctk.CTk):
         list_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
         self.allow_listbox = tk.Listbox(list_frame, selectmode="extended",
-                                        bg="#2b2b2b", fg="white",
-                                        selectbackground="#1f6aa5",
+                                        bg="#252525", fg="#F2F2F2",
+                                        selectbackground="#D82C2C",
                                         font=("Segoe UI", 11), height=12)
         self.allow_listbox.pack(side="left", fill="both", expand=True)
         scrollbar = ctk.CTkScrollbar(list_frame, command=self.allow_listbox.yview)
@@ -369,7 +408,7 @@ class HardLockApp(ctk.CTk):
         self.start_btn = ctk.CTkButton(btn_row, text="▶  START FOCUS BLOCK",
                                        font=ctk.CTkFont(size=16, weight="bold"),
                                        width=220, height=45,
-                                       fg_color="#1a7a3a", hover_color="#145c2c",
+                                       fg_color="#D82C2C", hover_color="#B82424",
                                        command=self.start_block)
         self.start_btn.pack(side="left", padx=10)
 
@@ -405,7 +444,7 @@ class HardLockApp(ctk.CTk):
         top.grab_set()
 
         ctk.CTkLabel(top, text="Select apps to add to whitelist:").pack(pady=8)
-        lb = tk.Listbox(top, selectmode="extended", bg="#2b2b2b", fg="white",
+        lb = tk.Listbox(top, selectmode="extended", bg="#252525", fg="#F2F2F2",
                         font=("Segoe UI", 11))
         lb.pack(fill="both", expand=True, padx=10, pady=5)
         for name in sorted(running):
@@ -728,7 +767,7 @@ class HardLockApp(ctk.CTk):
 
         ctk.CTkLabel(top, text="⚠ EMERGENCY STOP",
                      font=ctk.CTkFont(size=20, weight="bold"),
-                     text_color="#ff5555").pack(pady=15)
+                     text_color="#D82C2C").pack(pady=15)
 
         ctk.CTkLabel(top, text="Stopping early defeats the purpose of a focus block.\n"
                                "Only use this if there is a genuine emergency.",
@@ -745,7 +784,7 @@ class HardLockApp(ctk.CTk):
                      text_color="#aaaaaa").pack(pady=(15, 2))
         ctk.CTkLabel(top, text=phrase,
                      font=ctk.CTkFont(size=14, weight="bold"),
-                     text_color="#ffcc00").pack(pady=5)
+                     text_color="#F2F2F2").pack(pady=5)
 
         entry = ctk.CTkEntry(top, width=400)
         entry.pack(pady=5)
