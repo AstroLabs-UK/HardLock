@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HardLock v1.0.0
+HardLock v1.1.0
 Free open-source remake of Cold Turkey Micromanager.
 Unlimited whitelist • Timed / Restart / Pomodoro / Allowance modes
 Emergency stop is intentionally difficult.
@@ -44,7 +44,7 @@ if sys.platform == "win32":
 
 # --------------- Constants ---------------
 APP_NAME = "HardLock"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 # Change this to your own GitHub repo once you create it
 # Format: https://api.github.com/repos/USERNAME/REPO/releases/latest
@@ -773,13 +773,12 @@ class HardLockApp(ctk.CTk):
         def worker():
             try:
                 url = self.config.get("update_url") or UPDATE_CHECK_URL
-                if "YOUR_USERNAME" in url:
-                    # Placeholder – user hasn't set their own repo yet
-                    return
                 req = urllib.request.Request(url, headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"})
-                with urllib.request.urlopen(req, timeout=8) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode())
-                latest = data.get("tag_name", "").lstrip("v")
+                tag = data.get("tag_name", "")
+                # Accept tags like v1.0.0 or v1.0.0-42
+                latest = tag.lstrip("v").split("-")[0]
                 if not latest:
                     return
                 if self._version_gt(latest, APP_VERSION):
@@ -787,48 +786,104 @@ class HardLockApp(ctk.CTk):
                     download_url = None
                     for a in assets:
                         name = a.get("name", "").lower()
-                        if name.endswith(".exe") or "windows" in name or name.endswith(".zip"):
+                        if name == "hardlock.exe" or (name.endswith(".exe") and "hardlock" in name):
                             download_url = a.get("browser_download_url")
                             break
-                    if not download_url and data.get("html_url"):
-                        # Fallback: just notify
-                        self.after(0, lambda: self._offer_update(latest, data.get("html_url")))
-                    else:
-                        self.after(0, lambda: self._offer_update(latest, download_url or data.get("html_url")))
+                    if not download_url:
+                        for a in assets:
+                            if a.get("name", "").lower().endswith(".exe"):
+                                download_url = a.get("browser_download_url")
+                                break
+                    if download_url:
+                        self.after(0, lambda: self._offer_update(latest, download_url))
             except Exception:
-                pass  # silent fail – offline or no repo yet
+                pass  # silent fail when offline or no releases yet
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _version_gt(self, a, b):
         def parts(v):
-            return [int(x) for x in v.split(".") if x.isdigit()]
-        pa, pb = parts(a), parts(b)
-        return pa > pb
+            nums = []
+            for x in v.replace("-", ".").split("."):
+                if x.isdigit():
+                    nums.append(int(x))
+            return nums
+        return parts(a) > parts(b)
 
-    def _offer_update(self, latest, url):
-        if messagebox.askyesno("Update Available",
-                               f"A new version ({latest}) is available.\n\n"
-                               f"You are running {APP_VERSION}.\n\n"
-                               "Download and install now?\n"
-                               "(The app will restart and resume any active session.)"):
-            self._perform_update(url)
+    def _offer_update(self, latest, download_url):
+        if messagebox.askyesno(
+            "Update Available",
+            f"A new version ({latest}) is available.\n\n"
+            f"You are running {APP_VERSION}.\n\n"
+            "Download and install automatically now?\n"
+            "HardLock will restart and resume any active session."
+        ):
+            self._perform_update(download_url, latest)
 
-    def _perform_update(self, url):
-        """Download and prepare restart. Session is already being saved periodically."""
-        self.save_active_session()  # ensure latest state is on disk
-        try:
-            self.status_var.set("Downloading update…")
-            # For simplicity we open the release page; a full self-updating EXE
-            # would download the asset and replace itself (more complex on Windows).
-            import webbrowser
-            webbrowser.open(url)
-            messagebox.showinfo("Update",
-                                "The release page has been opened.\n"
-                                "Download the new version, replace this EXE, then relaunch.\n"
-                                "Any active focus session will be offered for resume.")
-        except Exception as e:
-            messagebox.showerror("Update Error", str(e))
+    def _perform_update(self, download_url, latest):
+        """Download the new EXE and use a helper to replace + restart."""
+        self.save_active_session()
+        self.status_var.set("Downloading update…")
+        self.update()
+
+        def worker():
+            try:
+                # Where the current executable lives
+                if getattr(sys, "frozen", False):
+                    current_exe = Path(sys.executable)
+                else:
+                    # Running from source – just notify
+                    self.after(0, lambda: messagebox.showinfo(
+                        "Update",
+                        "You are running from source.\n"
+                        "Please pull the latest code or download the new EXE from the release page."
+                    ))
+                    return
+
+                temp_dir = Path(tempfile.gettempdir()) / "hardlock_update"
+                temp_dir.mkdir(exist_ok=True)
+                new_exe = temp_dir / "HardLock_new.exe"
+                helper_bat = temp_dir / "apply_update.bat"
+
+                # Download the new EXE
+                req = urllib.request.Request(
+                    download_url,
+                    headers={"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
+                )
+                with urllib.request.urlopen(req, timeout=90) as resp, open(new_exe, "wb") as out:
+                    shutil.copyfileobj(resp, out)
+
+                # Helper batch: wait for HardLock to exit, then replace and relaunch
+                bat_lines = [
+                    "@echo off",
+                    "timeout /t 2 /nobreak >nul",
+                    ":wait",
+                    'tasklist /FI "IMAGENAME eq HardLock.exe" 2>NUL | find /I "HardLock.exe" >NUL',
+                    "if not errorlevel 1 (",
+                    "    timeout /t 1 /nobreak >nul",
+                    "    goto wait",
+                    ")",
+                    f'copy /Y "{new_exe}" "{current_exe}" >nul',
+                    f'start "" "{current_exe}"',
+                    f'del "{new_exe}"',
+                    'del "%~f0"',
+                ]
+                helper_bat.write_text("\r\n".join(bat_lines), encoding="utf-8")
+
+                self.after(0, lambda: self.status_var.set("Installing update and restarting…"))
+                import subprocess
+                subprocess.Popen(
+                    ["cmd", "/c", str(helper_bat)],
+                    creationflags=0x00000008,  # DETACHED_PROCESS
+                    close_fds=True
+                )
+                time.sleep(0.8)
+                self.after(0, self.destroy)
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Update Failed", str(e)))
+                self.after(0, lambda: self.status_var.set("Ready."))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # --------------- Session resume ---------------
     def check_resume_session(self):

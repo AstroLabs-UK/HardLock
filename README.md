@@ -31,7 +31,7 @@ Most distraction blockers let you blacklist sites or apps. HardLock does the opp
 | **Strict Enforcement** | Choose force-close or minimise for blocked applications. |
 | **Hard Emergency Stop** | Requires optional password + random confirmation phrase + final confirmation. |
 | **Session Resume** | If the app restarts or updates during a session, you can continue from the remaining time. |
-| **Auto-Update Check** | Optionally checks GitHub Releases for newer versions on launch. |
+| **Auto-Update Check** | Checks GitHub Releases on launch and can automatically download + install updates (with session resume). |
 | **Local Only** | All settings and session data stay on your machine. |
 
 ---
