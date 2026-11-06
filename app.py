@@ -886,7 +886,7 @@ class HardLockApp(ctk.CTk):
                     data = json.loads(resp.read().decode())
                 tag = data.get("tag_name", "")
                 # Accept tags like v1.0.0 or v1.0.0-42
-                latest = tag.lstrip("v").split("-")[0]
+                latest = tag.lstrip("vV").split("-")[0]
                 if not latest:
                     return
                 if self._version_gt(latest, APP_VERSION):
